@@ -1,2 +1,2 @@
 # QobuzDownloaderX-Automation-AutoHotKey
-HotHotKey Script / Exe to automate using QobuzDownloaderX
+HotHotKey V2 Script / Exe to automate using QobuzDownloaderX
