@@ -1,11 +1,16 @@
 # QobuzDownloaderX-Automation-AutoHotKey
-HotHotKey V2 Script / Exe to automate using QobuzDownloaderX
+HotHotKey V2 Script / Exe to automate using [QobuzDownloaderX](https://github.com/ImAiiR/QobuzDownloaderX) or the [fork Mod](https://github.com/DJDoubleD/QobuzDownloaderX-MOD)
 
-Verios
+<p style="align:center;">
+  <a href="./Screenshot Version 0.3.PNG?raw=true">
+    <img src="./Screenshot Version 0.3.PNG?raw=true" />
+  </a>
+</p>
+
 Features:
 - Queue mulitple albums to download through QobuzDownloaderX
-- Add an artist page to queue only highest quality albums
-- After downloading, saves a CSV file of queue for future database use
+- When an artist, award, label page is queue, only highest quality albums are added
+- Automates the interaction with QobuzDownloaderX for the queued albums
 - "Cleans" / Removes the FLAC (##bit-##kHz) folders that QobuzDownloaderX creates
 
 ## Instructions:
@@ -43,3 +48,20 @@ Point to your QobuzDownloaderX download folder and the program will (within the 
 
 ### Save Queue to CSV
 If checked before started, the queue will be saved to a CSV file at "CurrentDirectory\Queue_CSV". This is inteneded for future program use to get full artist discography
+
+# Disclaimer & Legal
+I will not be responsible for how you use QBDLX (QobuzDownloaderX). 
+
+This program DOES NOT include...
+- Code to bypass Qobuz's region restrictions.
+- Qobuz app IDs or secrets.
+
+QBDLX does not publish any of Qobuz's private secrets or app IDs. It contains regular expressions and other code to dynamically grab them from Qobuz's web player's *publicly available*  JavaScript, which is not rehosted, but grabbed client side. Scraping public data is not a violation of the Computer Fraud and Abuse Act (USA) according to the Ninth Court of Appeals, [case # 17-16783](http://cdn.ca9.uscourts.gov/datastore/opinions/2019/09/09/17-16783.pdf) (see page 29). 
+
+QBDLX uses the Qobuz API, but is not endorsed, certified or otherwise approved in any way by Qobuz.
+
+Qobuz brand and name is the registered trademark of its respective owner.
+
+QBDLX has no partnership, sponsorship or endorsement with Qobuz.
+
+By using QBDLX, you agree to the following: http://static.qobuz.com/apps/api/QobuzAPI-TermsofUse.pdf
