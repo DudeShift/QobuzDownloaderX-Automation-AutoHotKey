@@ -1,6 +1,7 @@
-#Requires AutoHotkey v2.0
+﻿#Requires AutoHotkey v2.0
 SendMode("Input") ; Recommend for new scripts due to its superior speed and reliability.
-SetWorkingDir(A_ScriptDir)
+SetWorkingDir(A_ScriptDir) ; Current Directory
+Suspend(true) ; Disable hotkeys
 
 _Instructions := "
 (    
@@ -22,7 +23,7 @@ The program will detected if the album is already queued and also queue the high
 - To Start: Click "Start Download Queue" to start process. DON'T move your mouse till complete
 
 You can use hotkey CTRL + Numpad 0 to pause the process if you need to do something.
-If you do, move it back over the "download" button on the QobuzDownloaderX Window when resuming
+If you do, move the mouse back over the "download" button on the QobuzDownloaderX Window before resuming
 
 - Use "Clean FLAC File Structure" to remove the FLAC file sturcture created by QobuzDownloaderX
 )"
@@ -31,34 +32,53 @@ MyGui := Gui()
 MyGui.Title := "QobuzDownloaderX Automation"
 MyGui.OnEvent("Close", GuiClose)
 
-ButtonStartProcess := MyGui.Add("Button", "vButtonStartProcess x+5 yp w200 section", "Start Download Queue of 0")
+ButtonStartProcess := MyGui.Add("Button", "x+5 yp w175 section vButtonStartProcess", "Start Download Queue of 0")
 ButtonStartProcess.OnEvent("Click", StartProcess)
-CheckBoxSaveToCSV := MyGui.Add("CheckBox" ,"vSaveToCSV x+5 yp w200", "Save Queue to CSV after Automation?")
-ButtonCleanFLACFileStructure := MyGui.Add("Button", "vButtonCleanFLACFileStructure x+5 yp w150", "Clean FLAC File Structure")
+MyGui.Add("Text", "x+5 yp+5 w100", "Download Instances:")
+ChoiceParallel := MyGui.Add("DropDownList", "Choose1 x+5 yp-5 w50 vChoiceParallel", ["1", "2", "4", "8", "Max"])
+ChoiceParallel.OnEvent("Change", warnParallel)
+CheckBoxSaveToCSV := MyGui.Add("CheckBox", "x+15 yp+5 w180 vSaveToCSV", "Save to CSV after Automation?")
+ButtonCleanFLACFileStructure := MyGui.Add("Button", "x+5 yp-5 w150 vButtonCleanFLACFileStructure", "Clean FLAC File Structure")
 ButtonCleanFLACFileStructure.OnEvent("Click", CleanFLACFileStructure)
-ButtonClearQueue := MyGui.Add("Button", "x+5 yp w135", "Clear Queue")
-ButtonClearQueue.OnEvent("Click", ClearQueue)
-MyListView := MyGui.Add("ListView", "xs ys+25 w700 h600 Grid Checked Sort -LV0x10 vMyListView", ["", "Artist", "Album", "Quality", "Link"])
+
+MyListView := MyGui.Add("ListView", "xs ys+30 w700 h600 Grid Checked Sort -LV0x10 vMyListView", ["", "Artist", "Album", "Quality", "Link"])
 MyListView.OnEvent("DoubleClick", ListViewOpenLink)
+
 TextBox := MyGui.Add("Edit", "section w300 vTextBox")
 ButtonAddItem := MyGui.Add("Button", "x+5 yp w100 Default", "Add Link")
 ButtonAddItem.OnEvent("Click", AddItem)
 ButtonRemoveItem := MyGui.Add("Button", "x+5 yp w150", "Remove Checked Albums")
 ButtonRemoveItem.OnEvent("Click", RemoveItem)
-MyGui.Add("Link", "xs ys+30", 'Version 0.3 <a href="https://github.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey">https://github.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey</a>')
-MyGui.Add("Text", "xs y+10" , _Instructions)
+ButtonClearQueue := MyGui.Add("Button", "x+5 yp w135", "Clear Queue")
+ButtonClearQueue.OnEvent("Click", ClearQueue)
+
+MyGui.Add("Link", "xs ys+30", 'Version 0.4 <a href="https://github.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey">https://github.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey</a>')
+MyGui.Add("Text", "xs y+10", _Instructions)
 
 MyGui.Show()
+changeButtonEnableState(false)
+ButtonAddItem.Enabled := true
+ButtonCleanFLACFileStructure.Enabled := true
 
-Suspend(true)
+if (!FileExist(A_ScriptDir . "\QobuzDownloaderX.exe")) {
+    MsgBox("Exiting: QobuzDownloaderX.exe not found in " . A_ScriptDir . "`nPlease move program / script into your QobuzDownloaderX.exe folder", "QobuzDownloaderX.exe Not Found", 16)
+    GuiClose()
+}
+
+while (WinExist("QobuzDownloaderX", , "Automation") || WinExist("QobuzDLX | Login", , "Automation")) {
+    MsgBox("Error: All instances of QobuzDownloaderX.exe to be closed`nPlease close all of them before you continue", "QobuzDownloaderX.exe is open", 16)
+}
+
+MsgBox("Warning: Make sure to have logged into and set download folder in QobuzDownloaderX.exe at least once before continuing", "QobuzDownloaderX.exe Pre-Req Check", 32)
+
 return
 
 ;### HotKey to Pause Downloading ###
 ^Numpad0::
 {
     Pause -1
-    if(A_IsPaused) {
-        ToolTip("Automation Paused:`nPress Ctrl + Numpad 0 to resume when mouse is on `"download`"")
+    if (A_IsPaused) {
+        ToolTip("Automation Paused:`nPress Ctrl + Numpad 0 to resume when:`nQobuzDownloaderX is open, active window,and mouse is on `"download`"")
     } else {
         ToolTip("Automation Resumed:`nWaiting for current album out of " . MyListView.GetCount() . " queued")
     }
@@ -66,13 +86,12 @@ return
 
 ;### GUI Handling ###
 
-; TODO Disabled for now, doesn't effect process
-;EnableRemoveButton(GuiCtrlObj, Item, Checked) {
-;    if (!ButtonRemoveItem.Enabled) {
-;        ButtonRemoveItem.Enabled := true
-;    }
-;    return
-;}
+; BETA: parallel downloading warning
+warnParallel(DDL, Choice) {
+    if (DDL.Value != 1) {
+        MsgBox("Beta Warning: This feature is not fully tested with large amount of parallel downloads.`nUse at your own risk`n`nView the github for current bugs")
+    }
+}
 
 changeButtonEnableState(state) {
     ButtonStartProcess.Enabled := state
@@ -88,21 +107,19 @@ ListViewOpenLink(LV, Row) {
 
 AddItem(*) {
     ; Input could be a: Full Album Link, Link with Album ID at end, Artist Link. Thus named dataLink
-    ; TODO if someone tries to add an artist link not on page 1
     dataLink := TextBox.Text
     if (StrCompare(dataLink, "") == 0) {
         MsgBox("No Link Provided: Please enter a link into the textbox")
     } else {
+        changeButtonEnableState(false)
         parts := StrSplit(dataLink, "/")
         if (parts.Length == 7) {
             if ((StrCompare(parts[3], "www.qobuz.com") == 0) && (StrCompare(parts[5], "interpreter") == 0)) {
-                changeButtonEnableState(false)
                 isAlreadyQueued := artistAddAlbums(dataLink, 1) ; artist link, page 1 for a counter
                 if (isAlreadyQueued != 0) {
                     MsgBox("Warning: Mulitple Albums ingored due to already being queued")
                 }
             } else if ((StrCompare(parts[3], "www.qobuz.com") == 0) && (StrCompare(parts[5], "album") == 0)) {
-                changeButtonEnableState(false)
                 isAlreadyQueued := isAlbumLinkInList(dataLink)
                 if (isAlreadyQueued != 0) {
                     MsgBox("Album Already Queued: " . MyListView.GetText(isAlreadyQueued, 3) . " by " . MyListView.GetText(isAlreadyQueued, 2))
@@ -113,8 +130,7 @@ AddItem(*) {
                 MsgBox("Invalid Link: Please enter a valid Qobuz link")
             }
         } else if ((parts.Length == 8) && ((StrCompare(parts[5], "awards") == 0) || (StrCompare(parts[5], "label") == 0))) {
-            changeButtonEnableState(false)
-            artistAddAlbums(datalink , 1) ; award or label link so send it
+            artistAddAlbums(datalink, 1) ; award or label link so send it
 
         } else {
             possibleAlbumLink := searchQobuzForAlbum(parts[parts.Length]) ; Either a album ID or play link
@@ -123,10 +139,9 @@ AddItem(*) {
                 if (isAlreadyQueued != 0) {
                     MsgBox ("Searched Album Already Queued: " . MyListView.GetText(isAlreadyQueued, 3) . " by " . MyListView.GetText(isAlreadyQueued, 2))
                 }
-                changeButtonEnableState(false)
                 addAlbum(possibleAlbumLink)
             } else {
-                MsgBox ("Invalid Link or Album ID: Please view instructions") ; no redirect when searching for album id directly
+                MsgBox ("Invalid Link, Invalid Album ID, or Link has page number: Please view instructions") ; no redirect when searching for album id directly
             }
         }
     }
@@ -142,32 +157,34 @@ AddItem(*) {
 }
 
 RemoveItem(*) {
+    changeButtonEnableState(false)
+    if (MyListView.GetCount() == 0) {
+        return ; do nothing
+    }
     ; Loop through MyListView to find checked rows
     ; Setting max loops as safety feature
     RowNumber := 0
     Loop MyListView.GetCount() {
-        MsgBox("Start Loop, row: " . RowNumber)
         RowNumber := MyListView.GetNext(, "Checked")
-        MsgBox("GetNext, row: " . RowNumber)
         if (RowNumber == 0) {
             ; No more checked rows
-            MsgBox("break")
             break
         } else {
             ; Checked Row Found, remove from queue and list view
-            MsgBox("Deleting row: " . RowNumber)
             MyListView.Delete(RowNumber)
         }
     }
+    changeButtonEnableState(true)
     ButtonStartProcess.Text := "Start Download Queue of " . MyListView.GetCount()
-    ButtonRemoveItem.Enabled := false
     return
 }
 
 ClearQueue(*) {
-    msgResult := MsgBox("Are you sure you want to clear the queue?`n`nClick Yes to continue, or No to go cancel.", "Clear Queue Warning", 4)
+    if (MyListView.GetCount() == 0) {
+        return ; do nothing
+    }
+    msgResult := MsgBox("Are you sure you want to clear the queue?`n`nClick Yes to continue, or No to go back.", "Clear Queue Warning", 4)
     if (msgResult = "Yes") {
-        MyListView.Delete()
         ButtonStartProcess.Text := "Start Download Queue of " . MyListView.GetCount()
     }
     return
@@ -177,66 +194,111 @@ StartProcess(*) {
     if (MyListView.GetCount() == 0) {
         MsgBox("Nothing in queue, add an album or artist")
     } else {
+        changeButtonEnableState(false)
         Suspend(false)
         CoordMode("Pixel", "Window")
         SetTitleMatchMode(2)
-        try {
-            WinActivate("QobuzDownloaderX", , "Automation")
-        } catch {
-            MsgBox("QobuzDownloaderX Not Open: Please open before starting")
-            return
+        ; before loop
+
+        ; BETA: Parallel downloads
+        ; choice value 5 == "Max" so queue count
+        howManyInstances := ChoiceParallel.Value
+        Switch howManyInstances {
+            case 1:
+                howManyInstances := 1
+            case 2:
+                howManyInstances := 2
+            case 3:
+                howManyInstances := 4
+            case 4:
+                howManyInstances := 8
+            case 5:
+                howManyInstances := MyListView.GetCount()
+            Default:
+                howManyInstances := 1
         }
-        
-        if (WinWaitActive("QobuzDownloaderX", , 2, "Automation") == 0) {
-            MsgBox("QobuzDownloaderX Not Open: Please open before starting")
-            return
+        if(howManyInstances > MyListView.GetCount()) {
+            howManyInstances := MyListView.GetCount()
         }
-        if(CheckBoxSaveToCSV.Value == 1) {
-        DirCreate "Queue_CSV"
-        cvsFilePath := A_ScriptDir . "\Queue_CSV\" . FormatTime(,"yyyy-MM-dd hh-mm-ss") . " Queue.csv"
-        FileAppend MyListView.GetText(0,2) . "," . MyListView.GetText(0,3) . "," . MyListView.GetText(0,4) . "," . MyListView.GetText(0,5), cvsFilePath
-        }
-        Loop MyListView.GetCount() {
-            parts := StrSplit(MyListView.GetText(A_Index, 5), "/")
-            playLink := "https://play.qobuz.com/album/" . parts[parts.Length]
-            Click("500, 95")
-            Send("^a")
-            Send("{Backspace}")
-            Send (playLink)
-            Click("615, 95")
-            ToolTip("Don't move the mouse:`nDownloading " . A_Index . " out of " . MyListView.GetCount() . " queued`nUse CTRL + Numpad 0 to pause")
+        ToolTip("Please Wait: Opening " . howManyInstances . " Download Instances...`nDon't move anything")
+        ; Create PID array
+        downloadInstancePIDArray := Array()
+        ; Open QobuzDownloaderX.exe and login
+        Loop howManyInstances {
+            try {
+                Run("QobuzDownloaderX.exe", A_ScriptDir, , &tempPID)
+            } catch {
+                MsgBox("Exiting: QobuzDownloaderX.exe not found in " . A_ScriptDir . "`nPlease move program / script into your QobuzDownloaderX.exe folder", "QobuzDownloaderX.exe Not Found", 16)
+                return
+            }
+            if (tempPID == 0) {
+                MsgBox("Critical Error: Couldn't get PID for Instance # " . A_Index, 16)
+                return
+            }
+            WinWaitActive("ahk_pid " tempPID " QobuzDLX | Login ",, 1, "Automation")
+            WinActivate("ahk_pid " tempPID " QobuzDLX | Login ",, "Automation")
+            downloadInstancePIDArray.Push(tempPID)
+            Send("{Enter}")
             Sleep(100)
-            ColorCheck := 0
-            Loop {
+        }
+        if (CheckBoxSaveToCSV.Value == 1) {
+            DirCreate "Queue_CSV"
+            cvsFilePath := A_ScriptDir . "\Queue_CSV\" . FormatTime(, "yyyy-MM-dd hh-mm-ss") . " Queue.csv"
+            FileAppend MyListView.GetText(0, 2) . "," . MyListView.GetText(0, 3) . "," . MyListView.GetText(0, 4) . "," . MyListView.GetText(0, 5), cvsFilePath
+        }
+        currentRowPointer := 1 ; Data starts a 1, and loop is going to add 1
+        while howManyInstances > 0 {
+            donePIDArray := Array()
+            Loop downloadInstancePIDArray.Length {
+                if(!downloadInstancePIDArray.Has(A_Index)) {
+                    continue ; null, skip pid since its been removed
+                }
+                currentPID := downloadInstancePIDArray[A_Index]
+                WinWaitActive("ahk_pid " currentPID " QobuzDownloaderX ",, 1, "Automation")
+                WinActivate("ahk_pid " currentPID " QobuzDownloaderX:",, "Automation")
+                WinMove(0, 0, , ,"ahk_pid " currentPID " QobuzDownloaderX:",, "Automation" )
                 ; Get the color at the specified window coordinate
-                ;MouseGetPos(&xpos, &ypos)
+                ; Mouse has to under pixel to get color, I know the docs say otherwise.
+                MouseMove 615, 95
                 color := PixelGetColor(615, 95, "RGB")
-                ; Check if the color has changed from 0070EF to 0086FF
                 if (color = 0x0086FF) {
-                    break
+                    if (currentRowPointer > MyListView.GetCount()) {
+                        donePIDArray.Push(A_Index)
+                        continue ; skip loop, removing pid since no more to queue
+                    } else {
+                        parts := StrSplit(MyListView.GetText(currentRowPointer, 5), "/")
+                        playLink := "https://play.qobuz.com/album/" . parts[parts.Length]
+                        MouseClick("Left", 500, 95, 1, 0)
+                        Click("500, 95")
+                        Send("^a")
+                        Send("{Backspace}")
+                        Send (playLink)
+                        MouseClick("Left", 500, 95, 1, 0)
+                        Click("615, 95")
+                        if (CheckBoxSaveToCSV.Value == 1) {
+                            FileAppend "`n" . MyListView.GetText(A_Index, 2) . "," . MyListView.GetText(A_Index, 3) . "," . MyListView.GetText(A_Index, 4) . "," . MyListView.GetText(A_Index, 5), cvsFilePath
+                        }
+                        ToolTip("Don't move the mouse:`nDownloading " . currentRowPointer . " out of " . MyListView.GetCount() . " queued`nWith " . howManyInstances . " download instances in use`nTo pause use CTRL + Numpad 0")
+                        currentRowPointer++
+                    }
                 }
-                ColorCheck++
-                if (ColorCheck >= 600) {
-                    ColorCheck := 0
-                    msgResult := MsgBox(playLink " has been downloading over one minute. Do you want to continue?`n`nClick Yes to continue, or No to exit.", "", 4)
-                    if (msgResult = "Yes")
-                        continue
-                    else
-                        break
-                }
-                ; Sleep for a short interval before checking again
                 Sleep(100)
             }
-            if(CheckBoxSaveToCSV.Value == 1) {
-            FileAppend "`n" . MyListView.GetText(A_Index,2) . "," . MyListView.GetText(A_Index,3) . "," . MyListView.GetText(A_Index,4) . "," . MyListView.GetText(A_Index,5), cvsFilePath
+            Loop donePIDArray.Length {
+                indexPID := donePIDArray.Pop()
+                WinClose("ahk_pid " downloadInstancePIDArray[indexPID] " QobuzDownloaderX:",,, "Automation")
+                downloadInstancePIDArray.Delete(indexPID)
+                howManyInstances--
             }
         }
+        ; When done
         ToolTip()
         totalQueue := MyListView.GetCount()
         MyListView.Delete()
+        changeButtonEnableState(true)
         ButtonStartProcess.Text := "Start Download Queue of " . MyListView.GetCount()
         Suspend(true)
-        if(CheckBoxSaveToCSV.Value == 1) {
+        if (CheckBoxSaveToCSV.Value == 1) {
             MsgBox("Finsihed Downloading: CSV of Queue of " . totalQueue . " at: " . cvsFilePath)
         } else {
             MsgBox("Finsihed Downloading: Queue of " . totalQueue)
@@ -256,7 +318,7 @@ CleanFLACFileStructure(*) {
     }
     ; Save the current working directory
     current_directory := A_WorkingDir
-    
+
     ; Change to the specified working directory
     SetWorkingDir(dirToClean)
     MsgBox("Working Dir: " . A_WorkingDir)
@@ -264,34 +326,34 @@ CleanFLACFileStructure(*) {
     Loop Files, "FLAC (*", "DR" {
         ; Now loop through each file
         MsgBox("Found flac ( dir at: " . A_LoopFileFullPath)
-        Loop Files, A_LoopFileFullPath . "\*.*" , "F" {
+        Loop Files, A_LoopFileFullPath . "\*.*", "F" {
             ; Get the full path and directory of the current file
             full_path := A_LoopFileFullPath
             MsgBox("Moving Loop | File: " . full_path)
-            if(InStr(full_path, dirToClean) == 0) {
+            if (InStr(full_path, dirToClean) == 0) {
                 MsgBox("Critical Error: Outside of Working Directory: " . A_WorkingDir . "`nEnding cleanFileStructureFLAC")
                 return 2
             }
             directory := A_LoopFileDir
             MsgBox("Moving Loop | File : " . full_path . " | directory: " . directory)
-        
+
             ; Move the file to the parent directory
-                FileMove full_path, directory . "\.."
+            FileMove full_path, directory . "\.."
         }
     }
-    
+
     ; Loop through all directories whose names start with "FLAC"
     Loop Files, "FLAC (*", "DR"
     {
         ; Get the full path of the current directory
         full_path := A_LoopFileFullPath
         MsgBox("Deleting Loop | FilePath: " . full_path)
-        
+
         ; Attempt to remove the directory, and show error message if failed
         try {
             DirDelete full_path, 0
         } catch {
-            MsgBox("Critical Error: " . A_LoopFileFullPath . "was not empty when trying to delete`n`nReason: There were two or more FLAC qualities of the album`n`nSolution: Manually move the verison you want, delete others, and re-run" )
+            MsgBox("Critical Error: " . A_LoopFileFullPath . "was not empty when trying to delete`n`nReason: There were two or more FLAC qualities of the album`n`nSolution: Manually move the verison you want, delete others, and re-run")
             return 3
         }
 
@@ -398,7 +460,7 @@ addAlbum(albumLink) {
     ; Get the postion after the album name
     posAfterAlbumName := posAlbumName + StrLen(albumName[])
     albumName := ReplaceHtmlCharacterCodes(albumName[])
-    
+
     ; Find the artist name & Clean it, (which is after album so using posAfterAlbumName to save time searching)
     RegExMatch(htmlSource, "S)(?<=<p class=`"player__artist`" data-artist=`")[^`"]+(?=`")", &artistName, posAfterAlbumName)
     artistName := ReplaceHtmlCharacterCodes(artistName[])
@@ -413,9 +475,9 @@ addAlbum(albumLink) {
 }
 
 processAlbumInfo(artist, album, new_bit, new_kHz, albumLink) {
-; return 0 - album was already in queue with better qual
-; return 1 - album wasn't in queue so added
-; return 2 - album was already in queue but had worse qual so this one was added
+    ; return 0 - album was already in queue with better qual
+    ; return 1 - album wasn't in queue so added
+    ; return 2 - album was already in queue but had worse qual so this one was added
     queuedRow := isAlbumQueued(artist, album)
     if (queuedRow != 0) {
         ; Get queued quality
