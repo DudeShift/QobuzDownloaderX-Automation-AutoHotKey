@@ -7,7 +7,7 @@ KeyHistory(0) ; Disable AutoHotKey key history meant only for debug https://www.
 ListLines(0) ; Disbale AutoHotKey script line debug
 
 ; ### Set Default Values ###
-global Version := "0.4.2" ; Current Version Number
+global Version := "0.5" ; Current Version Number
 global pidInUse := 0 ; global var for the hotkey pause tooltip to figure out which window to return to
 global flagAutomationActive := false ; flag used to switch hotkey states
 global scriptHotKey := ""
@@ -18,31 +18,28 @@ _Instructions_Set_Left_1 := "
 Instructions Summary (View Github Above For More Details):
 Pre-Req: Open QobuzDownloaderX, Login, set Download Folder, and Close at least once.
 
-- To Add: While on Qobuz pages press 
+- To Add: While on following Qobuz pages press Hotkey: 
 )"
 _Instructions_Set_Left_2 := "
 (
-to auto add, or copy url the edit box:
+
+    to auto add to queue, or copy url the input box:
 - Album:   https://www.qobuz.com/us-en/album/
 - Artist:  https://www.qobuz.com/us-en/interpreter/
 - Award:   https://www.qobuz.com/us-en/award/
 - Label:   https://www.qobuz.com/us-en/label/
 - AlbumID on its own
-
-The program will detected if the album is already queued and also queue the highest quality version
 )"
 _Instructions_Set_Right := "
 (
-- To Remove: Select checkboxes and use remove or use clear queue
-
-- Set "Parallel" Downloads: Set how many Instances of QobuzDownloaderX to create.
+- Set "Parallel" Downloads: Set how many Instances of QobuzDownloaderX to create for Automation.
+Warning: Above 15 can cause errors for QobuzDownloaderX login page. See wiki for more details.
     
-- To Start: Click "Start Download Queue" to start process. DON'T move your mouse till complete
-    
-- You can use hotkey CTRL + Numpad 0 to pause the process.
+- To Start Automation: Click "Start Download Queue". 
+Default Mode: Don't use mouse or keyboard. Use the same Hotkey to pause the process.
 However, return the mouse to the QobuzDownloaderX PID: #'s download button before resuming
     
-- Use "Clean FLAC File Structure" to remove the FLAC file sturcture created by QobuzDownloaderX
+- View more detials on the github repo linked above
 )"
 
 ; ####################
@@ -103,17 +100,27 @@ MyGui.Add("Text", "xs+500 yp+20", _Instructions_Set_Right)
 
 SettingsGui := Gui("+Owner" MyGui.Hwnd, A_ScriptName . " Settings")
 
-CheckBoxDisableCheckMsgBox := SettingsGui.Add("CheckBox", "xm+5 ym+5 Checked vPreCheckMsgBox", "Enable Pre-Check Message Box at Startup")
-CheckBoxAutoAddStart := SettingsGui.Add("Checkbox", "xp y+5 w400 vAutoStart", "Enable AutoAddStart: When using the hotkey to auto add to queue, the queue will automatically start processing")
-SettingsGui.Add("Text", "xp + y+10", "Set a New Hotkey: Click in the box below, press a hotkey, and click Save. Hotkey rules:`nAllowed Modifiers: CTRL, ALT, SHIFT`nCannot use: CTRL + {A, L, V} or Mouse")
+SettingsGui.Add("Text", "xm+5 ym+5", "Note: Settings will autosave`n`nPlease view the github wiki for more details")
+CheckBoxDisableCheckMsgBox := SettingsGui.Add("CheckBox", "xp y+25 Checked vPreCheckMsgBox", "Enables: Pre-Check Message Box at Startup")
+CheckBoxAutoAddStart := SettingsGui.Add("Checkbox", "xp y+5 w400 vAutoStart", "Enables: AutoAddStart: When using the hotkey to auto add to queue, the queue will automatically start processing")
+CheckBoxAddTextFLAC := SettingsGui.Add("Checkbox", "xp y+5 w400 vAddTextFLAC", "Enables: When Cleaning FLAC File Structure, save the album audio quality as a text file in the album folder")
+CheckBoxCSVOnePerDay := SettingsGui.Add("Checkbox", "xp y+5 w400 vCSVOnePerDay", "Enables: Only create on CSV per day. If Disabled CSV will be created per processing queue")
+CheckBoxCSVOnePerDay.OnEvent("Click", CSVSettings)
+CheckBoxCSVSingleAdd := SettingsGui.Add("Checkbox", "xp y+5 w400 vCSVSingleAdd", "Enables: When writing CSV, don't add albums already in CSV")
+CheckBoxCSVSingleAdd.Enabled := false
+EditLoginTimeout := SettingsGui.Add("Edit", "xp y+5 w50 Limit3 Number")
+UpDownLoginTimeout := SettingsGui.Add("UpDown", "Range1-120", 10)
+SettingsGui.Add("Text", "x+5 yp", " Set Login Timeout in Seconds")
+
+SettingsGui.Add("Text", "xm+5 + y+10", "Set a New Hotkey: Click in the box below, press a hotkey, and click Save. Hotkey rules:`nAllowed Modifiers: CTRL, ALT, SHIFT`nCannot use: CTRL + {A, L, V} or Mouse")
 EditHotkey := SettingsGui.Add("Hotkey", "xp + y+5 w200 vEditHotKey", "^Numpad0")
 ButtonHotKeySave := SettingsGui.Add("Button", "x+5 yp vButtonHotKeySave", "Bind")
 ButtonHotKeySave.OnEvent("Click", setHotKey)
 ;TextCurrentHotKey := SettingsGui.Add("Text", "x+5 + yp+5", "Current Hotkey: ")
 ;CheckBoxWinHotKey := SettingsGui.Add("CheckBox", "xm+5 y+5  vCheckBoxWinHotKey", "Add WIN key as hotkey modifier?")
-
-ButtonSettingsSave := SettingsGui.Add("Button", "xm+5 + y+25 vButtonSettingSave", "Save Settings (also main window view settings) and close")
-ButtonSettingsSave.OnEvent("Click", SettingsSave)
+;CheckBoxDirectControl := SettingsGui.Add("CheckBox", "xm+5 y+5 vCheckBoxDirectControl", "Enables: Direct QobuzDownloaderX Contol. Will run in background and allow user to use mouse and keyboard during Automation")
+ButtonSettingsClose := SettingsGui.Add("Button", "xm+5 y+25 vButtonSettingSave", "Close")
+ButtonSettingsClose.OnEvent("Click", SettingsClose)
 
 
 ; ##################
@@ -121,9 +128,7 @@ ButtonSettingsSave.OnEvent("Click", SettingsSave)
 ; ##################
 
 ; If settings ini is found
-if (FileExist(A_ScriptDir . "\QobuzDownloaderX Automation.ini")) {
-    SettingsLoad()
-}
+SettingsLoad()
 
 ; Set Hotkey
 Hotkey(EditHotKey.Value, hotkeyFunction, "On")
@@ -144,7 +149,7 @@ if (!FileExist(A_ScriptDir . "\QobuzDownloaderX.exe")) {
     MsgBox("Exiting: QobuzDownloaderX.exe not found in " . A_ScriptDir . "`nPlease move program / script into your QobuzDownloaderX.exe folder", "QobuzDownloaderX.exe Not Found", 16)
 }
 
-while (WinExist("QobuzDownloaderX", , "Automation") || WinExist("QobuzDLX | Login", , "Automation")) {
+while (WinExist("QobuzDownloaderX ahk_exe QobuzDownloaderX.exe", , "Automation ahk_class AutoHotkeyGUI") || WinExist("QobuzDLX | Login ahk_exe QobuzDownloaderX.exe", , "Automation ahk_class AutoHotkeyGUI")) {
     MsgBox("Error: All instances of QobuzDownloaderX.exe to be closed`nPlease close all of them before you continue", "QobuzDownloaderX.exe is open", 16)
 }
 
@@ -172,16 +177,17 @@ hotkeyFunction(*) {
         } else {
             ToolTip("Automation Resuming:`nWaiting update loop for " . MyListView.GetCount() . " queued")
         }
-    } else if (WinActive("Automation ahk_class AutoHotkeyGUI")) {
-        return ; script window found, no hotkey
-    } else {
+    } else if (WinActive("Qobuz",,"Automation ahk_class AutoHotkeyGUI")) { ; Not GUI but any window with Qobuz
         A_Clipboard := ""
         Send("^l")
         Sleep(100)
         Send("^c")
-        ClipWait
+        if(ClipWait(1) == 0) {
+            TrayTip(, "Nothing in Clipboard", 16)
+            return
+        }
         Send("{Escape}")
-        TextBoxLink.Text := A_Clipboard
+        TextBoxLink.Value := A_Clipboard
         flagAddSuccessful := AddItem()
         tempString := "Added:"
         if (CheckBoxAutoAddStart.Value){
@@ -205,6 +211,7 @@ hotkeyFunction(*) {
             StartProcess()
         }
     }
+    return
 }
 
 ; ####################
@@ -257,7 +264,7 @@ checkParallelAmount(UpDown, info) {
     NewValue := UpDown.Value
     if (NewValue >= 100) {
         NewValue := 100
-        MsgBox("Warning: Setting Instances to 100`n`nReason: Honestly haven't tested that many")
+        MsgBox("Warning: Setting Instances to 100`n`nReason: Honestly haven't tested that many so I hardcoded a limit incase something breaks","Warning: Max Instances",48)
     }
     if (NewValue > MyListView.GetCount()) {
         NewValue := MyListView.GetCount()
@@ -414,6 +421,7 @@ StartProcess(*) {
     } else {
         changeButtonEnableState(false)
         CheckBoxSaveToCSV.Enabled := false
+        ButtonAdvanceSettings.Enabled := false
         ;Suspend(false)
         CoordMode("Pixel", "Client")
         SetTitleMatchMode(2)
@@ -435,6 +443,8 @@ StartProcess(*) {
                 ToolTip()
                 MsgBox("Exiting: QobuzDownloaderX.exe not found in " . A_ScriptDir . "`nPlease move program / script into your QobuzDownloaderX.exe folder", "QobuzDownloaderX.exe Not Found", 16)
                 changeButtonEnableState(true)
+                CheckBoxSaveToCSV.Enabled := true
+                ButtonAdvanceSettings.Enabled := true
                 global flagAutomationActive := false
                 return
             }
@@ -442,6 +452,8 @@ StartProcess(*) {
                 ToolTip()
                 MsgBox("Critical Error: Couldn't get PID for Instance # " . A_Index, 16)
                 changeButtonEnableState(true)
+                CheckBoxSaveToCSV.Enabled := true
+                ButtonAdvanceSettings.Enabled := true
                 global flagAutomationActive := false
                 return
             }
@@ -450,18 +462,22 @@ StartProcess(*) {
             ;WinMove(0, 0, , ,"ahk_pid " tempPID,, "ahk_class AutoHotkeyGUI Automation" )
             downloadInstancePIDArray.Push(tempPID)
             Send("{Enter}")
-            Sleep(100)
+            Sleep(200)
         }
         if (CheckBoxSaveToCSV.Value == 1) {
             DirCreate "Queue_CSV"
-            csvFilePath := A_ScriptDir . "\Queue_CSV\" . FormatTime(, "yyyy-MM-dd") . " Queue.csv"
+            if (CheckBoxCSVOnePerDay.Value == 1) {
+                csvFilePath := A_ScriptDir . "\Queue_CSV\" . FormatTime(, "yyyy-MM-dd") . " Queue.csv"
+            } else {
+                csvFilePath := A_ScriptDir . "\Queue_CSV\" . FormatTime(, "yyyy-MM-ddTHH-mm-ss") . " Queue.csv"
+            }
             if (!FileExist(csvFilePath)) {
-                FileAppend("`"" . MyListView.GetText(0, 2) . "`",`"" . MyListView.GetText(0, 3) . "`",`"" . MyListView.GetText(0, 4) . "`",`"" . MyListView.GetText(0, 5) . "`",`"" . MyListView.GetText(0, 6) . "`",`"" . MyListView.GetText(0, 6) . "`"", csvFilePath)
+                FileAppend("`"" . MyListView.GetText(0, 2) . "`",`"" . MyListView.GetText(0, 3) . "`",`"" . MyListView.GetText(0, 4) . "`",`"" . MyListView.GetText(0, 5) . "`",`"" . MyListView.GetText(0, 6) . "`",`"" . MyListView.GetText(0, 7) . "`"", csvFilePath)
             }
         }
 
         ; TODO change from waiting for first to putting this inside the while loop to allow same idea of start while waiting to load next. Waiting to load all might be too slow for some.
-        secondsToWait := 15
+        secondsToWait := UpDownLoginTimeout.Value
         currentSeconds := 0
         Loop secondsToWait {
             currentSeconds := A_Index - 1
@@ -484,6 +500,8 @@ StartProcess(*) {
             }
             changeButtonEnableState(true)
             global flagAutomationActive := false
+            CheckBoxSaveToCSV.Enabled := true
+            ButtonAdvanceSettings.Enabled := true
             return
         }
 
@@ -495,6 +513,7 @@ StartProcess(*) {
                     continue ; null, skip pid since its been removed
                 }
                 currentPID := downloadInstancePIDArray[A_Index]
+                
                 WinWaitActive("ahk_pid " currentPID, , 1, "Automation ahk_class AutoHotkeyGUI")
                 WinActivate("ahk_pid " currentPID, , "Automation ahk_class AutoHotkeyGUI")
                 global pidInUse := currentPID
@@ -502,7 +521,8 @@ StartProcess(*) {
                 WinSetStyle("+0xC00000", "PID: " . currentPID, , "Automation ahk_class AutoHotkeyGUI")
                 WinMove(0, 0, , , "ahk_pid " currentPID, , "Automation ahk_class AutoHotkeyGUI")
 
-                ToolTip("Don't move the mouse:`nQueued " . currentRowPointer - 1 . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
+
+                ToolTip("Don't use mouse or keyboard:`nQueued " . currentRowPointer - 1 . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
 
                 ; Get the color at the specified window coordinate
                 ; Mouse has to under pixel to get color, I know the docs say otherwise.
@@ -525,9 +545,34 @@ StartProcess(*) {
                         if (CheckBoxSaveToCSV.Value == 1) {
                             artist := StrReplace(MyListView.GetText(currentRowPointer, 2), "`"", "`"`"")
                             album := StrReplace(MyListView.GetText(currentRowPointer, 3), "`"", "`"`"")
-                            FileAppend "`n`"" . artist . "`",`"" . album . "`",`"" . MyListView.GetText(currentRowPointer, 4) . "`",`"" . MyListView.GetText(currentRowPointer, 5) . "`",`"" . MyListView.GetText(currentRowPointer, 6) . "`",`"" . MyListView.GetText(currentRowPointer, 7) . "`"", csvFilePath
+                            flagFoundArtistAlbum := false
+                            if (CheckBoxCSVSingleAdd.Value) {
+                                Loop Read csvFilePath {
+                                    flagArtistFound := false
+                                    flagAlbumFound := false
+                                    Loop Parse, A_LoopReadLine, "CSV" {
+                                        if ((A_Index == 1) && (StrCompare(A_LoopField, artist)) == 0) {
+                                            flagArtistFound := true
+                                        }
+                                        if ((A_Index == 2) && (StrCompare(A_LoopField, album)) == 0) {
+                                            flagAlbumFound := true
+                                        }
+                                        if (flagArtistFound && flagAlbumFound) {
+                                            flagFoundArtistAlbum := true
+                                            break
+                                        }
+                                    }
+                                    if (flagFoundArtistAlbum) {
+                                        break
+                                    }
+                                }
+                            }
+                            if (flagFoundArtistAlbum == false) {
+                                FileAppend "`n`"" . artist . "`",`"" . album . "`",`"" . MyListView.GetText(currentRowPointer, 4) . "`",`"" . MyListView.GetText(currentRowPointer, 5) . "`",`"" . MyListView.GetText(currentRowPointer, 6) . "`",`"" . MyListView.GetText(currentRowPointer, 7) . "`"", csvFilePath
+                        
+                            }
                         }
-                        ToolTip("Don't move the mouse:`nQueued " . currentRowPointer . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
+                        ToolTip("Don't use mouse or keyboard:`nQueued " . currentRowPointer . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
                         currentRowPointer++
                     }
                 }
@@ -538,7 +583,7 @@ StartProcess(*) {
                 WinClose("ahk_pid " downloadInstancePIDArray[indexPID] " PID:", , , "ahk_class AutoHotkeyGUI Automation")
                 downloadInstancePIDArray.Delete(indexPID)
                 howManyInstances--
-                ToolTip("Don't move the mouse:`nQueued " . currentRowPointer - 1 . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
+                ToolTip("Don't use mouse or keyboard:`nQueued " . currentRowPointer - 1 . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
             }
         }
         ; After Parallel, when complete
@@ -551,6 +596,7 @@ StartProcess(*) {
         ButtonLoadCSV.Enabled := true
         TextBoxLink.Enabled := true
         CheckBoxSaveToCSV.Enabled := true
+        ButtonAdvanceSettings.Enabled := true
         ButtonStartProcess.Text := "Start Download Queue of " . MyListView.GetCount()
         global flagAutomationActive := false
         ;Suspend(true)
@@ -565,12 +611,12 @@ StartProcess(*) {
 
 ; Based on a directory, will find any folder named "FLAC (", check with regex, move files inside up a directory, and detete the "FLAC (" folder after checking with regex
 CleanFLACFileStructure(*) {
-    MsgBox("Warning: This script was not made for checking if an album has multiple qualities`n`nThis is only an issue if you have manually downloaded a lower quality album in the past`n`nAfter running, QobuzDownloaderX will not be able to detect an already downloaded album at the directory given")
+    MsgBox("Warning: This script is intended to clean up the file structure of FLAC folders. It will search in a user given directoryfor the FLAC (##bit-##kHz) folder structure created by QobuzDownloaderX, move files inside up a directory, and remove the now empty FLAC folders. You are meant to run this when you are ready to move your downloads from your QobuzDownloaderX directory.`n`nAfter completion, QobuzDownloaderX will not be able to detect if an album has already been downloaded in the specified directory.`n`nThis script does not deal with an album folder having multiple qualities and will throw an error.`n`nPlease use caution and ensure that you have a backup of any files you wish to keep at the directory your going to give before running this script.",,48)
     dirToClean := DirSelect(, 0, "Please select your QobuzDownloaderX downloads folder")
     if (dirToClean == "") {
         return 0
     }
-    msgResult := MsgBox("Please confirm the directory: " . dirToClean . "`n`n If incorrect click cancel to go back to main GUI", "", 1)
+    msgResult := MsgBox("Please confirm the directory: " . dirToClean . "`n`n If incorrect click cancel to go back to main GUI", "", 49)
     if (msgResult = "Cancel") {
         return 0
     }
@@ -591,13 +637,23 @@ CleanFLACFileStructure(*) {
             ; Get the full path and directory of the current file
             full_path := A_LoopFileFullPath
             if (InStr(full_path, dirToClean) == 0) {
-                MsgBox("Critical Error: Outside of Working Directory: " . A_WorkingDir . "`nEnding cleanFileStructureFLAC at Moving Files")
+                MsgBox("Critical Error: Outside of Working Directory: " . A_WorkingDir . "`nEnding cleanFileStructureFLAC at Moving Files",,16)
                 return 2
             }
             directory := A_LoopFileDir
 
             ; Move the file to the parent directory
-            FileMove full_path, directory . "\.."
+            try {
+                FileMove full_path, directory . "\.."
+            } catch {
+                parts := StrSplit(A_LoopFileDir, "\")
+                parts.Pop()
+                MsgBox("Critical Error: " . parts[parts.Length-1] . "\" . parts[parts.Length] . "\" . " may have two FLAC qualities`n`nPossible Reason: There were two or more FLAC qualities of the album`n`nSolution: Manually move the verison you want, delete others, and re-run", "Critical Error: " . parts[parts.Length-1] . "\" . parts[parts.Length] . "\", 16)
+                return 3
+            }
+        }
+        if (CheckBoxAddTextFLAC.Value) {
+            FileAppend("", directory . "\..\" . A_LoopFileName . ".txt")
         }
     }
 
@@ -615,7 +671,7 @@ CleanFLACFileStructure(*) {
         try {
             DirDelete full_path, 0
         } catch {
-            MsgBox("Critical Error: " . A_LoopFileFullPath . "was not empty when trying to delete`n`nReason: There were two or more FLAC qualities of the album`n`nSolution: Manually move the verison you want, delete others, and re-run")
+            MsgBox("Critical Error: " . A_LoopFileFullPath . "was not empty when trying to delete`n`nReason: There were two or more FLAC qualities of the album`n`nSolution: Manually move the verison you want, delete others, and re-run",, 16)
             return 3
         }
 
@@ -631,9 +687,11 @@ CleanFLACFileStructure(*) {
 LoadCSV(*) {
     whichCSV := FileSelect(1, , "Select a Queue CSV To Load - " . A_ScriptName, "(*.csv)")
     if (whichCSV = "") {
+        changeButtonEnableState(true)
         return ; do nothing, no file selected
     } else if (InStr(whichCSV, ".csv") == 0) {
         MsgBox("Critical Error: File type not .csv was selected")
+        changeButtonEnableState(true)
         return
     } else {
         changeButtonEnableState(false)
@@ -641,12 +699,12 @@ LoadCSV(*) {
             LineNumber := A_Index
             parts := Array()
             Loop Parse, A_LoopReadLine, "CSV" {
-                if (A_Index > 5) {
-                    MsgBox("Error: Data outside the five columns which are:`n`n`"Artist`",`"Album`",`"Bit`",`"kHz`",`"Link`"")
+                if (A_Index > 6) {
+                    MsgBox("Error: Data outside the five columns which are:`n`n`"Artist`",`"Album`",`"Release Date`",`"Bit`",`"kHz`",`"Link`"")
                     return
                 } else if (LineNumber == 1) {
                     if (StrCompare(A_LoopField, MyListView.GetText(0, A_Index + 1)) != 0) {
-                        MsgBox("Error: Incorrect CSV Column Header which are:`n`n`"Artist`",`"Album`",`"Bit`",`"kHz`",`"Link`"")
+                        MsgBox("Error: Incorrect CSV Column Header which are:`n`n`"Artist`",`"Album`",`"Release Date`",`"Bit`",`"kHz`",`"Link`"")
                         return
                     }
                 } else {
@@ -661,10 +719,10 @@ LoadCSV(*) {
             }
         }
         TrayTip(whichCSV, "CSV Loaded to Queue:", 16)
+        parts := StrSplit(whichCSV, "\")
+        TextWhichCSV.Text := "Loaded: " . parts[parts.Length]
     }
-    parts := StrSplit(whichCSV, "\")
     changeButtonEnableState(true)
-    TextWhichCSV.Text := "Loaded: " . parts[parts.Length]
     ButtonAddItem.Text := "Add Link"
     TextboxLink.Text := "" ; Empty the textbox
     ButtonStartProcess.Text := "Start Download Queue of " . MyListView.GetCount()
@@ -674,6 +732,7 @@ LoadCSV(*) {
 
 
 MyGuiClose(*) {
+    SettingsSave()
     ExitApp()
 }
 
@@ -963,28 +1022,55 @@ AdvanceSettings(*) {
     return
 }
 
+CSVSettings(*) {
+    if (CheckBoxCSVOnePerDay.Value) {
+        CheckBoxCSVSingleAdd.Enabled := true
+    } else {
+        CheckBoxCSVSingleAdd.Enabled := false
+    }
+}
+
+SettingsClose(*) {
+    SettingsSave()
+    SettingsGui.Hide()
+}
+
 SettingsSave(*) {
-    iniFile := A_ScriptDir . "\QobuzDownloaderX Automation.ini"
+    iniFile := A_ScriptDir . "\QobuzDownloaderX Automation Settings.ini"
     IniWrite(ChoiceParallel.Value, iniFile, "MainWindow", "Instances")
     IniWrite(DropDownAutoSort.Value, iniFile, "MainWindow", "AutoSort")
     IniWrite(CheckBoxAutoAdjust.Value, iniFile, "MainWindow", "AutoAdjust")
     IniWrite(CheckBoxSaveToCSV.Value, iniFile, "MainWindow", "SaveCSV")
     IniWrite(CheckBoxDisableCheckMsgBox.Value, iniFile, "SettingsWindow", "PreCheckMsg")
     IniWrite(CheckBoxAutoAddStart.Value, iniFile, "SettingsWindow", "AutoAddStart")
+    IniWrite(CheckBoxAddTextFLAC.Value, iniFile, "SettingsWindow", "AddTextFLAC")
+    IniWrite(CheckBoxCSVOnePerDay.Value, iniFile, "SettingsWindow", "CSVOnePerDay")
+    IniWrite(CheckBoxCSVSingleAdd.Value, iniFile, "SettingsWindow", "CSVSingleAdd")
+    IniWrite(UpDownLoginTimeout.Value, iniFile, "SettingsWindow", "LoginTimeout")
     IniWrite(EditHotkey.Value, iniFile, "SettingsWindow", "Hotkey")
+    ;IniWrite(CheckBoxDirectControl.Value, iniFile, "SettingsWindow", "Directcontrol")
 }
 
 SettingsLoad(*) {
-    iniFile := A_ScriptDir . "\QobuzDownloaderX Automation.ini"
-    TextBoxChoiceParallel.Value := IniRead(iniFile, "MainWindow", "Instances")
-    ChoiceParallel.Value := IniRead(iniFile, "MainWindow", "Instances")
-    DropDownAutoSort.Value := IniRead(iniFile, "MainWindow", "AutoSort")
-    CheckBoxAutoAdjust.Value := IniRead(iniFile, "MainWindow", "AutoAdjust")
-    CheckBoxSaveToCSV.Value := IniRead(iniFile, "MainWindow", "SaveCSV")
-    CheckBoxDisableCheckMsgBox.Value := IniRead(iniFile, "SettingsWindow", "PreCheckMsg")
-    CheckBoxAutoAddStart.Value := IniRead(iniFile, "SettingsWindow", "AutoAddStart")
-    EditHotkey.Value := IniRead(iniFile, "SettingsWindow", "Hotkey")
+    iniFile := A_ScriptDir . "\QobuzDownloaderX Automation Settings.ini"
+    if (!FileExist(A_ScriptDir . "\QobuzDownloaderX Automation Settings.ini")) {
+        FileAppend("", iniFile)
+    }
+    TextBoxChoiceParallel.Value := IniRead(iniFile, "MainWindow", "Instances", 1)
+    ChoiceParallel.Value := IniRead(iniFile, "MainWindow", "Instances", 1)
+    DropDownAutoSort.Value := IniRead(iniFile, "MainWindow", "AutoSort", 1)
+    CheckBoxAutoAdjust.Value := IniRead(iniFile, "MainWindow", "AutoAdjust", 1)
+    CheckBoxSaveToCSV.Value := IniRead(iniFile, "MainWindow", "SaveCSV", 1)
+    CheckBoxDisableCheckMsgBox.Value := IniRead(iniFile, "SettingsWindow", "PreCheckMsg", 1)
+    CheckBoxAutoAddStart.Value := IniRead(iniFile, "SettingsWindow", "AutoAddStart", 0)
+    CheckBoxAddTextFLAC.Value := IniRead(iniFile, "SettingsWindow", "AddTextFlac", 0)
+    CheckBoxCSVOnePerDay.Value := IniRead(iniFile, "SettingsWindow", "CSVOnePerDay", 0)
+    CheckBoxCSVSingleAdd.Value := IniRead(iniFile, "SettingsWindow", "CSVSingleAdd", 0)
+    UpDownLoginTimeout.Value := IniRead(iniFile, "SettingsWindow", "LoginTimeout", 10)
+    EditHotkey.Value := IniRead(iniFile, "SettingsWindow", "Hotkey", "^Numpad0")
+    ;CheckBoxDirectControl.Value := IniRead(iniFile, "SettingsWindow", "DirectControl", 0)
     global scriptHotKey := EditHotkey.Value
+    CSVSettings()
 }
 
 setHotKey(*) {
