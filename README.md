@@ -1,7 +1,8 @@
 # QobuzDownloaderX-Automation-AutoHotKey
 AutoHotKey V2 Script / Exe to automate using [QobuzDownloaderX](https://github.com/ImAiiR/QobuzDownloaderX) or the [fork Mod](https://github.com/DJDoubleD/QobuzDownloaderX-MOD)
 
-![Screenshot Version 0 5](https://raw.githubusercontent.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey/main/media/Screenshot%20Version%200.5.PNG)
+![Screenshot Version 0 5](https://user-images.githubusercontent.com/90281465/233743941-93fdf257-9130-4052-8b31-c0e122ac2005.PNG)
+
 
 ## **Features:**
 - Queue multiple albums to download automatically through QobuzDownloaderX
@@ -14,7 +15,8 @@ AutoHotKey V2 Script / Exe to automate using [QobuzDownloaderX](https://github.c
 
 ## **Demo Video:**
 
-![Demo Video](https://raw.githubusercontent.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey/main/media/Video%20Version%200.5.webm)
+[Video Version 0.5.webm](https://user-images.githubusercontent.com/90281465/233743962-d247a686-5328-4f92-8d34-1cf0b03e6d7b.webm)
+
 
 ## **Install Instructions:**
 1. At least once: Open QobuzDownloaderX, login with your account, set the download folder, and close. You will not need to open QobuzDownloaderX again. 
