@@ -1,5 +1,5 @@
 # QobuzDownloaderX-Automation-AutoHotKey
-AutoHotKey V2 Script / Exe to automate using [QobuzDownloaderX](https://github.com/ImAiiR/QobuzDownloaderX) or the [fork Mod](https://github.com/DJDoubleD/QobuzDownloaderX-MOD)
+AutoHotKey V2 Script to automate using [QobuzDownloaderX](https://github.com/ImAiiR/QobuzDownloaderX) or the [fork Mod](https://github.com/DJDoubleD/QobuzDownloaderX-MOD). View releases for compiled exe 
 
 ![Screenshot Version 0 5](https://user-images.githubusercontent.com/90281465/233743941-93fdf257-9130-4052-8b31-c0e122ac2005.PNG)
 
