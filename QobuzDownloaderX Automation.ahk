@@ -177,7 +177,9 @@ hotkeyFunction(*) {
         } else {
             ToolTip("Automation Resuming:`nWaiting update loop for " . MyListView.GetCount() . " queued")
         }
-    } else if (WinActive("Qobuz",,"Automation ahk_class AutoHotkeyGUI")) { ; Not GUI but any window with Qobuz
+    } else if (WinActive("Automation ahk_class AutoHotkeyGUI")) { ;  GUI so skip
+        return
+    } else if (WinActive("Qobuz",,"Automation ahk_class AutoHotkeyGUI")) { ; Window with Qobuz in title, hope its a browser
         A_Clipboard := ""
         Send("^l")
         Sleep(100)
@@ -611,7 +613,7 @@ StartProcess(*) {
 
 ; Based on a directory, will find any folder named "FLAC (", check with regex, move files inside up a directory, and detete the "FLAC (" folder after checking with regex
 CleanFLACFileStructure(*) {
-    MsgBox("Warning: This script is intended to clean up the file structure of FLAC folders. It will search in a user given directoryfor the FLAC (##bit-##kHz) folder structure created by QobuzDownloaderX, move files inside up a directory, and remove the now empty FLAC folders. You are meant to run this when you are ready to move your downloads from your QobuzDownloaderX directory.`n`nAfter completion, QobuzDownloaderX will not be able to detect if an album has already been downloaded in the specified directory.`n`nThis script does not deal with an album folder having multiple qualities and will throw an error.`n`nPlease use caution and ensure that you have a backup of any files you wish to keep at the directory your going to give before running this script.",,48)
+    MsgBox("Warning: This script is intended to clean up the file structure of FLAC folders. It will search in a user given directory for the FLAC (##bit-##kHz) folder structure created by QobuzDownloaderX, move files inside up a directory, and remove the now empty FLAC folders. You are meant to run this when you are ready to move your downloads from your QobuzDownloaderX directory.`n`nAfter completion, QobuzDownloaderX will not be able to detect if an album has already been downloaded in the specified directory.`n`nThis script does not deal with an album folder having multiple qualities and will throw an error.`n`nPlease use caution and ensure that you have a backup of any files you wish to keep at the directory your going to give before running this script.",,48)
     dirToClean := DirSelect(, 0, "Please select your QobuzDownloaderX downloads folder")
     if (dirToClean == "") {
         return 0
