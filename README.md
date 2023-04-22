@@ -40,6 +40,8 @@ The program will get the artist / album information from page (and multiple) and
 
 *Note: You can just copy-paste into the edit box and press enter without having to click "Add Link".*
 
+I have not tested with non-us Qobuz links. If an album or artist ID is the same in different countries then you should be able to login using your own country Qobuz account. I cannot test them for you.
+
 ## **To View an Album Link:**
 Double click on a row to have the link open in your web browser.
 
