@@ -1,7 +1,8 @@
 # QobuzDownloaderX-Automation-AutoHotKey
-AutoHotKey V2 Script / Exe to automate using [QobuzDownloaderX](https://github.com/ImAiiR/QobuzDownloaderX) or the [fork Mod](https://github.com/DJDoubleD/QobuzDownloaderX-MOD)
+AutoHotKey V2 Script to automate using [QobuzDownloaderX](https://github.com/ImAiiR/QobuzDownloaderX) or the [fork Mod](https://github.com/DJDoubleD/QobuzDownloaderX-MOD). View releases for compiled exe 
 
-![Screenshot Version 0 5](https://raw.githubusercontent.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey/main/media/Screenshot%20Version%200.5.PNG)
+![Screenshot Version 0 5](https://user-images.githubusercontent.com/90281465/233743941-93fdf257-9130-4052-8b31-c0e122ac2005.PNG)
+
 
 ## **Features:**
 - Queue multiple albums to download automatically through QobuzDownloaderX
@@ -14,12 +15,15 @@ AutoHotKey V2 Script / Exe to automate using [QobuzDownloaderX](https://github.c
 
 ## **Demo Video:**
 
-![Demo Video](https://raw.githubusercontent.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey/main/media/Video%20Version%200.5.webm)
+[Video Version 0.5.webm](https://user-images.githubusercontent.com/90281465/233743962-d247a686-5328-4f92-8d34-1cf0b03e6d7b.webm)
+
 
 ## **Install Instructions:**
 1. At least once: Open QobuzDownloaderX, login with your account, set the download folder, and close. You will not need to open QobuzDownloaderX again. 
 2. Move the released automation exe or current ahk script build to inside your QobuzDownloaderX folder next to QobuzDownloaderX.exe
 3. Open the automation exe or current ahk script build. Don't open QobuzDownloaderX.
+
+Warning: Please check for a QobuzDownloaderX updates before running as an update message box will break the automation
 
 # **Basic Instructions:**
 ## **To Add to Queue:**
@@ -35,6 +39,8 @@ Press the user defined hotkey (default is `CTRL+Numpad 0` and changed in Advance
 The program will get the artist / album information from page (and multiple) and will be shown in the queue. Only the highest quality version of an album on the artist page will be queued.
 
 *Note: You can just copy-paste into the edit box and press enter without having to click "Add Link".*
+
+I have not tested with non-us Qobuz links. If an album or artist ID is the same in different countries then you should be able to login using your own country Qobuz account. I cannot test them for you.
 
 ## **To View an Album Link:**
 Double click on a row to have the link open in your web browser.
