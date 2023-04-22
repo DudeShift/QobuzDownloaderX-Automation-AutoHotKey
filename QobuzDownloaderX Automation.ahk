@@ -871,7 +871,7 @@ processAlbumInfo(artist, album, releaseDate, new_bit, new_kHz, albumLink) {
             ; new bit is probably 24 while queued bit is 16
             ; new kHz is higher, 16Bit max mhz is 24bit min mhz.
             MyListView.Delete(queuedRow)
-            MyListView.Add(, "", artist, album, new_bit, new_kHz, albumLink)
+            MyListView.Add(, "", artist, album, releaseDate, new_bit, new_kHz, albumLink)
             return 2
         } else {
             ; Do Nothing since higher qual album already queued
