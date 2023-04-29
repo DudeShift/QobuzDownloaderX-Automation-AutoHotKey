@@ -20,7 +20,7 @@ AutoHotKey V2 Script to automate using [QobuzDownloaderX](https://github.com/ImA
 
 ## **Install Instructions:**
 1. At least once: Open QobuzDownloaderX, login with your account, set the download folder, and close. You will not need to open QobuzDownloaderX again. 
-2. Move the released automation exe or current ahk script build to inside your QobuzDownloaderX folder next to QobuzDownloaderX.exe
+2. Move the released automation exe or current ahk script build to inside your QobuzDownloaderX folder next to QobuzDownloaderX.exe. If using Version 0.6 or higher and ahk script, must include [UIA-v2 by Descolada](https://github.com/Descolada/UIA-v2) UIA.ahk to folder as well. 
 3. Open the automation exe or current ahk script build. Don't open QobuzDownloaderX.
 
 Warning: Please check for a QobuzDownloaderX updates before running as an update message box will break the automation
