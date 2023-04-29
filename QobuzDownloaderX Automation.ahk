@@ -1,13 +1,32 @@
 ﻿#Requires AutoHotkey v2.0
+#Include UIA.ahk
 #SingleInstance Force
 SendMode("Input") ; Recommend for new scripts due to its superior speed and reliability.
 SetWorkingDir(A_ScriptDir) ; Current Directory
 ;Suspend(true) ; Disable hotkeys, only enabled during Automation (StartProcess)
 KeyHistory(0) ; Disable AutoHotKey key history meant only for debug https://www.autohotkey.com/docs/v2/lib/KeyHistory.htm
 ListLines(0) ; Disbale AutoHotKey script line debug
+DetectHiddenWindows 1 ; Detects hidden windows, may help UIA
+
+; ### Class for Instances to make UIA easier ###
+class QBDLX_Instance {
+    ; Properties
+    PID := 0
+    Status := ""
+    Album := "" ; Either album object or row number?
+    StartTime := 0 ; A_TickCount to get current ms to use later so processingTime := A_TickCount - startTime
+
+    ; Constructors
+    __New(pid, status, album, startTime) {
+        this.PID := pid
+        this.Status := status
+        this.Album := album
+        this.StartTime := startTime
+    }
+}
 
 ; ### Set Default Values ###
-global Version := "0.5" ; Current Version Number
+global Version := "0.6" ; Current Version Number
 global pidInUse := 0 ; global var for the hotkey pause tooltip to figure out which window to return to
 global flagAutomationActive := false ; flag used to switch hotkey states
 global scriptHotKey := ""
@@ -36,10 +55,9 @@ _Instructions_Set_Right := "
 Warning: Above 15 can cause errors for QobuzDownloaderX login page. See wiki for more details.
     
 - To Start Automation: Click "Start Download Queue". 
-Default Mode: Don't use mouse or keyboard. Use the same Hotkey to pause the process.
-However, return the mouse to the QobuzDownloaderX PID: #'s download button before resuming
+Don't use mouse or keyboard till tooltip disappears and Instruction text changes
     
-- View more detials on the github repo linked above
+- View more details on the github repo linked above
 )"
 
 ; ####################
@@ -92,7 +110,7 @@ TextWhichCSV := MyGui.Add("Text", "x+5 yp+5 w145 vTextWhichCSV", "")
 MyGui.Add("Link", "xs ys+30", 'Version ' . Version . ' <a href="https://github.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey">https://github.com/DudeShift/QobuzDownloaderX-Automation-AutoHotKey</a>')
 TextUpdateAvailable := MyGui.Add("Text", "x+5 yp w500 vTextUpdateAvaible", "")
 TextInstructions_Set_Left := MyGui.Add("Text", "xs y+10", _Instructions_Set_Left_1 . " " . _Instructions_Set_Left_2)
-MyGui.Add("Text", "xs+500 yp+20", _Instructions_Set_Right)
+TextInstructions_Set_Right := MyGui.Add("Text", "xs+500 yp+20", _Instructions_Set_Right)
 
 ; ####################
 ; ### Settings GUI ###
@@ -108,9 +126,19 @@ CheckBoxCSVOnePerDay := SettingsGui.Add("Checkbox", "xp y+5 w400 vCSVOnePerDay",
 CheckBoxCSVOnePerDay.OnEvent("Click", CSVSettings)
 CheckBoxCSVSingleAdd := SettingsGui.Add("Checkbox", "xp y+5 w400 vCSVSingleAdd", "Enables: When writing CSV, don't add albums already in CSV")
 CheckBoxCSVSingleAdd.Enabled := false
-EditLoginTimeout := SettingsGui.Add("Edit", "xp y+5 w50 Limit3 Number")
+
+EditLoginTimeBetween := SettingsGui.Add("Edit", "xm+5 y+10 w50 Limit4 Number")
+UpDownLoginTimeBetween := SettingsGui.Add("UpDown", "Range1-9999", 300)
+SettingsGui.Add("Text", "x+5 yp", " Set Time between Login Instances in milliseconds (Reduces errors (see wiki) but increases time) (Default 300)")
+
+EditLoginTimeout := SettingsGui.Add("Edit", "xm+5 y+10 w50 Limit3 Number")
 UpDownLoginTimeout := SettingsGui.Add("UpDown", "Range1-120", 10)
-SettingsGui.Add("Text", "x+5 yp", " Set Login Timeout in Seconds")
+SettingsGui.Add("Text", "x+5 yp", " Set Login Timeout in Second (Default 10)")
+
+
+EditDownloadTimeout := SettingsGui.Add("Edit", "xm+5 y+10 w50 Limit3 Number")
+UpDownDownloadTimeout := SettingsGui.Add("UpDown", "Range1-600", 60)
+SettingsGui.Add("Text", "x+5 yp", " Set Download Timeout in Seconds (If a instance is stuck downloading) (Default 120)")
 
 SettingsGui.Add("Text", "xm+5 + y+10", "Set a New Hotkey: Click in the box below, press a hotkey, and click Save. Hotkey rules:`nAllowed Modifiers: CTRL, ALT, SHIFT`nCannot use: CTRL + {A, L, V} or Mouse")
 EditHotkey := SettingsGui.Add("Hotkey", "xp + y+5 w200 vEditHotKey", "^Numpad0")
@@ -167,15 +195,15 @@ return
 ; #######################
 
 ; Using one hotkey for auto add and pausing to make it easier on the user
-; TODO Use HotIf to divide hotkey actions up. However isn't an excude WinTitle so shrug
+; TODO Use HotIf to divide hotkey actions up. However isn't an exclude WinTitle so shrug
 ; HotIfWinNotactive wasn't working for GUI
 hotkeyFunction(*) {
     if (flagAutomationActive) {
         Pause -1
         if (A_IsPaused) {
-            ToolTip("Automation Paused:`nPress " . getHotKeyString() . " to resume when cursor is on `nPID: " . pidInUse " `"download`" button")
+            ToolTip("Automation Paused:`nPress " . getHotKeyString() . " to resume")
         } else {
-            ToolTip("Automation Resuming:`nWaiting update loop for " . MyListView.GetCount() . " queued")
+            ToolTip()
         }
     } else if (WinActive("Automation ahk_class AutoHotkeyGUI")) { ;  GUI so skip
         return
@@ -420,12 +448,11 @@ ClearQueue(*) {
 StartProcess(*) {
     if (MyListView.GetCount() == 0) {
         MsgBox("Nothing in queue, add an album or artist")
+        return
     } else {
         changeButtonEnableState(false)
         CheckBoxSaveToCSV.Enabled := false
         ButtonAdvanceSettings.Enabled := false
-        ;Suspend(false)
-        CoordMode("Pixel", "Client")
         SetTitleMatchMode(2)
         ; before Parallel
 
@@ -433,16 +460,16 @@ StartProcess(*) {
         if (howManyInstances > MyListView.GetCount()) {
             howManyInstances := MyListView.GetCount()
         }
-        ToolTip("Please Wait: Opening " . howManyInstances . " download instances...`nDon't move anything")
         ; Create PID array
-        downloadInstancePIDArray := Array()
-        ; Open QobuzDownloaderX.exe and login
+        downloadInstanceArray := Array()
+        ; Spawn QobuzDownloaderX.exe instances
+        ToolTip("Please wait to move mouse, opening " howManyInstances " instances")
         global flagAutomationActive := true
         Loop howManyInstances {
             try {
-                Run("QobuzDownloaderX.exe", A_ScriptDir, , &tempPID)
+                ; TODO add "Min" to option
+                Run("QobuzDownloaderX.exe", A_ScriptDir,, &tempPID)
             } catch {
-                ToolTip()
                 MsgBox("Exiting: QobuzDownloaderX.exe not found in " . A_ScriptDir . "`nPlease move program / script into your QobuzDownloaderX.exe folder", "QobuzDownloaderX.exe Not Found", 16)
                 changeButtonEnableState(true)
                 CheckBoxSaveToCSV.Enabled := true
@@ -451,21 +478,219 @@ StartProcess(*) {
                 return
             }
             if (tempPID == 0) {
-                ToolTip()
                 MsgBox("Critical Error: Couldn't get PID for Instance # " . A_Index, 16)
-                changeButtonEnableState(true)
-                CheckBoxSaveToCSV.Enabled := true
-                ButtonAdvanceSettings.Enabled := true
-                global flagAutomationActive := false
+                quickClosePIDs(downloadInstanceArray)
                 return
             }
-            WinWaitActive("ahk_pid " tempPID " QobuzDLX | Login ", , 1, "Automation ahk_class AutoHotkeyGUI")
-            WinActivate("ahk_pid " tempPID " QobuzDLX | Login ", , "Automation ahk_class AutoHotkeyGUI")
-            ;WinMove(0, 0, , ,"ahk_pid " tempPID,, "ahk_class AutoHotkeyGUI Automation" )
-            downloadInstancePIDArray.Push(tempPID)
-            Send("{Enter}")
-            Sleep(200)
+            if (WinWait("QobuzDLX | Login ahk_pid " . tempPID, , 5, "Automation ahk_class AutoHotkeyGUI") == 0) {
+                MsgBox("Critical Error: QobuzDLX didn't open after 5 seconds, considering that an error and stopping automation")
+                quickClosePIDs(downloadInstanceArray)
+                return
+            }
+            temp_Instance := QBDLX_Instance(tempPID, "Login", "", 0)
+            downloadInstanceArray.Push(temp_Instance)
+            
+            ; Sometimes UIA creates a GDI+ window that isn't needed
+            WinClose("GDI+ Window (QobuzDownloaderX.exe) ahk_pid " tempPID)
+
+            ; Press Login Button Directly
+            try {
+                QobuzLoginEl := UIA.ElementFromHandle("QobuzDLX | Login ahk_pid " tempPID)
+                loginButton := QobuzLoginEl.WaitElement({AutomationId:"loginButton"}, 1000)
+                if (loginButton == 0) {
+                    MsgBox("Error: UIA can't find loginButton element")
+                    quickClosePIDs(downloadInstanceArray)
+                    return
+                } else {
+                    loginButton.Invoke()
+                }
+            } catch {
+                if (WinExist("QBDLX | Update Available ahk_pid " tempPID)) { ; Update Available
+                    resultMsg := MsgBox("QBDLX Update Available: Do you wish to continue?`n`nClick Ok to continue or Cancel to stop automation`n`nNote: You will have this message box per instance. Sorry", "QBDLX Update Available", 1)
+                    if (resultMsg == "Cancel") {
+                        quickClosePIDs(downloadInstanceArray)
+                        return
+                    } else {
+                        try {
+                            QobuzUpdateXEl := UIA.ElementFromHandle("QBDLX | Update Available ahk_pid " tempPID)
+                            noButton := QobuzUpdateXEl.WaitElement({Type:"Button", Name:"No"}, 1000)
+                            if (noButton == 0) {
+                                MsgBox("Error: UIA can't find noButton element")
+                                quickClosePIDs(downloadInstanceArray)
+                                return
+                            } else {
+                                noButton.Invoke()
+                                QobuzLoginEl := UIA.ElementFromHandle("QobuzDLX | Login ahk_pid " tempPID)
+                                loginButton := QobuzLoginEl.WaitElement({AutomationId:"loginButton"}, 1000)
+                                if (loginButton == 0) {
+                                    MsgBox("Error: UIA can't find loginButton element")
+                                    quickClosePIDs(downloadInstanceArray)
+                                    return
+                                } else {
+                                    loginButton.Invoke()
+                                }
+                            }
+                        } catch {
+                            MsgBox("Error: UIA can't find ConnectionFailed window")
+                            quickClosePIDs(downloadInstanceArray)
+                            return
+                        }
+                    }
+                } else if (WinExist("QBDLX | GitHub Connection Failed ahk_pid " tempPID)) { ; Can't connect because too many logins
+                    try {
+                        QobuzUpdateXEl := UIA.ElementFromHandle("QBDLX | GitHub Connection Failed ahk_pid " tempPID)
+                        noButton := QobuzUpdateXEl.WaitElement({Type:"Button", Name:"No"}, 1000)
+                        if (noButton == 0) {
+                            MsgBox("Error: UIA can't find noButton element")
+                            quickClosePIDs(downloadInstanceArray)
+                            return
+                        } else {
+                            noButton.Invoke()
+                            QobuzLoginEl := UIA.ElementFromHandle("QobuzDLX | Login ahk_pid " tempPID)
+                            loginButton := QobuzLoginEl.WaitElement({AutomationId:"loginButton"}, 1000)
+                            if (loginButton == 0) {
+                                MsgBox("Error: UIA can't find loginButton element")
+                                quickClosePIDs(downloadInstanceArray)
+                                return
+                            } else {
+                                loginButton.Invoke()
+                            }
+                        }
+                    } catch {
+                        MsgBox("Error: UIA can't find ConnectionFailed window")
+                        quickClosePIDs(downloadInstanceArray)
+                        return
+                    }
+                } else {
+                MsgBox("Error: UIA can't find window")
+                quickClosePIDs(downloadInstanceArray)
+                return
+                }
+            }
+
+            Sleep(UpDownLoginTimeBetween.Value)
         }
+        secondsToWait := UpDownLoginTimeout.Value
+        currentSeconds := 0
+        amountInstanceReady := 0
+        while currentSeconds < secondsToWait {
+            Loop downloadInstanceArray.Length {
+                currentInstance := downloadInstanceArray[A_Index]
+                if ((WinExist("QobuzDownloaderX ahk_pid " currentInstance.PID, ,"Automation ahk_class AutoHotkeyGUI") != 0) && (StrCompare(currentInstance.Status, "Login") == 0)) {
+                    currentInstance.Status := "Ready"
+                    amountInstanceReady++
+                    currentSeconds := 0
+                    WinSetTitle("PID: " . currentInstance.PID, "ahk_pid " currentInstance.PID, , "Automation ahk_class AutoHotkeyGUI")
+                    ;WinSetStyle("+0xC00000", "PID: " . currentInstance.PID, , "Automation ahk_class AutoHotkeyGUI")
+                    WinMinimize("PID: " currentInstance.PID " ahk_pid " currentInstance.PID, , "Automation ahk_class AutoHotkeyGUI")
+                    
+                }
+            }
+            if (amountInstanceReady == howManyInstances) {
+                break
+            }
+            Sleep(1000)
+            currentSeconds++
+        }
+
+        if (amountInstanceReady != howManyInstances) {
+            MsgBox("Error: Timeout while login`n`nOne or more instances took longer then " . secondsToWait . " seconds to login.`n`nStopping automation")
+            quickClosePIDs(downloadInstanceArray)
+            return
+        }
+
+        ToolTip()
+        ; Average Var
+        runningTotalTime := 0
+        amountDone := 0
+        estimatedTimeLeft := 0
+
+        TextInstructions_Set_Left.Text := "Automation Process Running:`n`nProcess " 0 " of " MyListView.GetCount() " albums using " howManyInstances " instances.`n`nTime Estimate: unknown "
+        TextInstructions_Set_Right.Text := ""
+        currentRowPointer := 1 ; Data starts a 1, and loop is going to add 1
+        while howManyInstances > 0 {
+            donePIDArray := Array()
+            Loop downloadInstanceArray.Length {
+                if (!downloadInstanceArray.Has(A_Index)) {
+                    continue ; null, skip pid since its been removed
+                }
+                currentInstance := downloadInstanceArray[A_Index]
+                global pidInUse := currentInstance.PID
+                uiaCurrentInstanceXEI := "" ; create variable to be assigned in try block
+                try {
+                    uiaCurrentInstanceXEI := UIA.ElementFromHandle("PID: " currentInstance.PID " ahk_pid " currentInstance.PID)
+                } catch {
+                    MsgBox("Error: UIA can't find window")
+                    quickClosePIDs(downloadInstanceArray)
+                    return
+                }
+
+                ; TODO might have to bring window forward at 1% then back
+                downloadButton := uiaCurrentInstanceXEI.WaitElement({AutomationID:"downloadButton"}, 1000)
+                downloadUrl := uiaCurrentInstanceXEI.WaitElement({AutomationID:"downloadUrl"}, 1000)
+                ;output := uiaCurrentInstanceXEI.WaitElement({AutomationID:"output"}, 1000)               
+
+                if ((downloadButton == 0)) {   
+                    MsgBox("Error: UIA can't find downloadButton")
+                    quickClosePIDs(downloadInstanceArray)
+                    return
+                } else if (downloadUrl == 0) {
+                    MsgBox("Error: UIA can't find downloadUrl")
+                    quickClosePIDs(downloadInstanceArray)
+                    return
+                }
+
+                if ((downloadButton.IsEnabled) || (StrCompare(currentInstance.Status, "Ready") == 0)) {
+                    if (currentRowPointer > MyListView.GetCount()) {
+                        donePIDArray.Push(A_Index)
+                        continue ; skip loop, removing instance since no more to queue
+                    } else {
+                        if ((StrCompare(currentInstance.Status, "Ready") == 0)) {
+                            currentInstance.Status := "Running"
+                        } else {
+                            runningTotalTime := runningTotalTime + ((A_TickCount - currentInstance.StartTime) / 1000 )
+                            amountDone++
+                            estimatedTimeLeft := (runningTotalTime / amountDone) * (MyListView.GetCount() - amountDone)
+                            estimatedTimeLeft := Format("{:.2f}", estimatedTimeLeft)
+                        }
+                        
+                        currentInstance.Album := currentRowPointer
+                        parts := StrSplit(MyListView.GetText(currentRowPointer, 7), "/")
+                        playLink := "https://play.qobuz.com/album/" . parts[parts.Length]
+                        downloadUrl.SetValue(playLink)
+                        downloadButton.Invoke()
+                        currentInstance.StartTime := A_TickCount
+                        currentRowPointer++
+                    }
+                }
+
+                if ((StrCompare(currentInstance.Status, "Running") == 0) && ((A_TickCount - currentInstance.StartTime) > (UpDownDownloadTimeout.Value * 1000))) {
+                    MsgBox("Error on PID# " . currentInstance.PID . " : Downloading timeout reached. Can you check on it?`n`nAlbum: " . MyListView.GetText(currentInstance.RowPointer, 3) . " by " . MyListView.GetText(currentInstance.RowPointer, 2))
+                    MsgBox("Continuing automation on message box close")
+                }
+                Sleep(100) ; TODO just setting this here to allow for unknown processing error. Will mess with timers
+            }
+            Loop donePIDArray.Length {
+                indexInstanceNumber := donePIDArray.Pop()
+                ;WinKill("ahk_pid " downloadInstanceArray[indexInstanceNumber].PID, , , "ahk_class AutoHotkeyGUI Automation")
+                ProcessClose(downloadInstanceArray[indexInstanceNumber].PID)
+                downloadInstanceArray.RemoveAt(indexInstanceNumber)
+                howManyInstances--
+            }
+
+            if (estimatedTimeLeft > 60) {
+                TextInstructions_Set_Left.Text := "Automation Process Running:`n`nProcess " currentRowPointer - 1 " of " MyListView.GetCount() " albums using " howManyInstances " instances.`n`nTime Estimate till Automation Complete: " estimatedTimeLeft " minutes`nWhich is based on current time downloads (see wiki for more info)"
+            } else {
+                TextInstructions_Set_Left.Text := "Automation Process Running:`n`nProcess " currentRowPointer - 1 " of " MyListView.GetCount() " albums using " howManyInstances " instances.`n`nTime Estimate till Automation Complete: " estimatedTimeLeft " seconds`nWhich is based on current time downloads (see wiki for more info)"
+            }
+
+
+        }
+
+
+        ; After Parallel, when complete
+
+        ; CSV saving after queue has finished
         if (CheckBoxSaveToCSV.Value == 1) {
             DirCreate "Queue_CSV"
             if (CheckBoxCSVOnePerDay.Value == 1) {
@@ -476,120 +701,41 @@ StartProcess(*) {
             if (!FileExist(csvFilePath)) {
                 FileAppend("`"" . MyListView.GetText(0, 2) . "`",`"" . MyListView.GetText(0, 3) . "`",`"" . MyListView.GetText(0, 4) . "`",`"" . MyListView.GetText(0, 5) . "`",`"" . MyListView.GetText(0, 6) . "`",`"" . MyListView.GetText(0, 7) . "`"", csvFilePath)
             }
-        }
 
-        ; TODO change from waiting for first to putting this inside the while loop to allow same idea of start while waiting to load next. Waiting to load all might be too slow for some.
-        secondsToWait := UpDownLoginTimeout.Value
-        currentSeconds := 0
-        Loop secondsToWait {
-            currentSeconds := A_Index - 1
-            ToolTip("Waiting for First Login to Complete`nTimeout in: " . currentSeconds . " out of " . secondsToWait . " seconds")
-            try {
-                currentTitle := WinGetTitle("ahk_pid " downloadInstancePIDArray[1])
-                if (StrCompare(currentTitle, "QobuzDownloaderX") == 0) {
-                    break
+            Loop MyListView.GetCount() {
+                if (A_Index == 0) {
+                    continue
                 }
-            } catch {
-                ; do nothing, pid might be in-between changing from log-in to QobuzDownloaderX
-            }
-            sleep(1000)
-        }
-        ToolTip()
-        if (currentSeconds == (secondsToWait - 1)) {
-            MsgBox("Error: First Instance stuck on Login Screen. Did you forget to login first?`n`nClick OK to Stop Automation and close QobuzDownloaderX Instances")
-            Loop downloadInstancePIDArray.Length {
-                WinClose("ahk_pid " downloadInstancePIDArray[A_Index], , , "Automation ahk_class AutoHotkeyGUI")
-            }
-            changeButtonEnableState(true)
-            global flagAutomationActive := false
-            CheckBoxSaveToCSV.Enabled := true
-            ButtonAdvanceSettings.Enabled := true
-            return
-        }
-
-        currentRowPointer := 1 ; Data starts a 1, and loop is going to add 1
-        while howManyInstances > 0 {
-            donePIDArray := Array()
-            Loop downloadInstancePIDArray.Length {
-                if (!downloadInstancePIDArray.Has(A_Index)) {
-                    continue ; null, skip pid since its been removed
-                }
-                currentPID := downloadInstancePIDArray[A_Index]
-                
-                WinWaitActive("ahk_pid " currentPID, , 1, "Automation ahk_class AutoHotkeyGUI")
-                WinActivate("ahk_pid " currentPID, , "Automation ahk_class AutoHotkeyGUI")
-                global pidInUse := currentPID
-                WinSetTitle("PID: " . currentPID, "ahk_pid " currentPID, , "Automation ahk_class AutoHotkeyGUI")
-                WinSetStyle("+0xC00000", "PID: " . currentPID, , "Automation ahk_class AutoHotkeyGUI")
-                WinMove(0, 0, , , "ahk_pid " currentPID, , "Automation ahk_class AutoHotkeyGUI")
-
-
-                ToolTip("Don't use mouse or keyboard:`nQueued " . currentRowPointer - 1 . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
-
-                ; Get the color at the specified window coordinate
-                ; Mouse has to under pixel to get color, I know the docs say otherwise.
-                ; TODO found in 0.4.2, actually to not use the mouse need to find different element on screen
-                MouseMove 615, 95
-                color := PixelGetColor(615, 95, "RGB")
-                if (color = 0x0086FF) {
-                    if (currentRowPointer > MyListView.GetCount()) {
-                        donePIDArray.Push(A_Index)
-                        continue ; skip loop, removing pid since no more to queue
-                    } else {
-                        parts := StrSplit(MyListView.GetText(currentRowPointer, 7), "/")
-                        playLink := "https://play.qobuz.com/album/" . parts[parts.Length]
-                        MouseClick("Left", 575, 95, 1, 0)
-                        Send("^a")
-                        Send("{Backspace}")
-                        A_Clipboard := playLink
-                        Send ("^v")
-                        MouseClick("Left", 615, 95, 1, 0)
-                        if (CheckBoxSaveToCSV.Value == 1) {
-                            artist := StrReplace(MyListView.GetText(currentRowPointer, 2), "`"", "`"`"")
-                            album := StrReplace(MyListView.GetText(currentRowPointer, 3), "`"", "`"`"")
-                            flagFoundArtistAlbum := false
-                            if (CheckBoxCSVSingleAdd.Value) {
-                                Loop Read csvFilePath {
-                                    flagArtistFound := false
-                                    flagAlbumFound := false
-                                    Loop Parse, A_LoopReadLine, "CSV" {
-                                        if ((A_Index == 1) && (StrCompare(A_LoopField, artist)) == 0) {
-                                            flagArtistFound := true
-                                        }
-                                        if ((A_Index == 2) && (StrCompare(A_LoopField, album)) == 0) {
-                                            flagAlbumFound := true
-                                        }
-                                        if (flagArtistFound && flagAlbumFound) {
-                                            flagFoundArtistAlbum := true
-                                            break
-                                        }
-                                    }
-                                    if (flagFoundArtistAlbum) {
-                                        break
-                                    }
-                                }
+                artist := StrReplace(MyListView.GetText(A_Index, 2), "`"", "`"`"")
+                album := StrReplace(MyListView.GetText(A_Index, 3), "`"", "`"`"")
+                flagFoundArtistAlbum := false
+                if (CheckBoxCSVSingleAdd.Value) {
+                    Loop Read csvFilePath {
+                        flagArtistFound := false
+                        flagAlbumFound := false
+                        Loop Parse, A_LoopReadLine, "CSV" {
+                            if ((A_Index == 1) && (StrCompare(A_LoopField, artist)) == 0) {
+                                flagArtistFound := true
                             }
-                            if (flagFoundArtistAlbum == false) {
-                                FileAppend "`n`"" . artist . "`",`"" . album . "`",`"" . MyListView.GetText(currentRowPointer, 4) . "`",`"" . MyListView.GetText(currentRowPointer, 5) . "`",`"" . MyListView.GetText(currentRowPointer, 6) . "`",`"" . MyListView.GetText(currentRowPointer, 7) . "`"", csvFilePath
-                        
+                            if ((A_Index == 2) && (StrCompare(A_LoopField, album)) == 0) {
+                                flagAlbumFound := true
+                            }
+                            if (flagArtistFound && flagAlbumFound) {
+                                flagFoundArtistAlbum := true
+                                break
                             }
                         }
-                        ToolTip("Don't use mouse or keyboard:`nQueued " . currentRowPointer . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
-                        currentRowPointer++
+                        if (flagFoundArtistAlbum) {
+                            break
+                        }
                     }
                 }
-                Sleep(100)
-            }
-            Loop donePIDArray.Length {
-                indexPID := donePIDArray.Pop()
-                WinClose("ahk_pid " downloadInstancePIDArray[indexPID] " PID:", , , "ahk_class AutoHotkeyGUI Automation")
-                downloadInstancePIDArray.Delete(indexPID)
-                howManyInstances--
-                ToolTip("Don't use mouse or keyboard:`nQueued " . currentRowPointer - 1 . " out of " . MyListView.GetCount() . " albums`nViewing instance PID " . currentPID . " of " . howManyInstances . " total running`nTo pause use " . getHotKeyString())
+                if (flagFoundArtistAlbum == false) {
+                    FileAppend "`n`"" . artist . "`",`"" . album . "`",`"" . MyListView.GetText(A_Index, 4) . "`",`"" . MyListView.GetText(A_Index, 5) . "`",`"" . MyListView.GetText(A_Index, 6) . "`",`"" . MyListView.GetText(A_Index, 7) . "`"", csvFilePath
+                }
             }
         }
-        ; After Parallel, when complete
-        ToolTip()
+
         totalQueue := MyListView.GetCount()
         MyListView.Delete()
         changeButtonEnableState(false)
@@ -600,8 +746,9 @@ StartProcess(*) {
         CheckBoxSaveToCSV.Enabled := true
         ButtonAdvanceSettings.Enabled := true
         ButtonStartProcess.Text := "Start Download Queue of " . MyListView.GetCount()
+        TextInstructions_Set_Left.Text := _Instructions_Set_Left_1 . " " . getHotKeyString() . " " . _Instructions_Set_Left_2
+        TextInstructions_Set_Right.Text := _Instructions_Set_Right
         global flagAutomationActive := false
-        ;Suspend(true)
         if (CheckBoxSaveToCSV.Value == 1) {
             TrayTip("CSV Saved: " . csvFilePath, "Finished Queue of " . totalQueue, 16)
         } else {
@@ -964,6 +1111,20 @@ searchQobuzForAlbum(albumID) {
     }
 }
 
+; Function just for closing open Instances if error during automation
+quickClosePIDs(ArrayOfInstances) {
+    Loop ArrayOfInstances.Length {
+        WinClose("ahk_pid " . ArrayOfInstances[A_Index].PID)
+    }
+    TextInstructions_Set_Left.Text := _Instructions_Set_Left_1 . " " . getHotKeyString() . " " . _Instructions_Set_Left_2
+    TextInstructions_Set_Right.Text := _Instructions_Set_Right
+    changeButtonEnableState(true)
+    CheckBoxSaveToCSV.Enabled := true
+    ButtonAdvanceSettings.Enabled := true
+    global flagAutomationActive := false
+    return
+}
+
 ; Handles the 302 redirects when searching
 Request(url) {
     WebRequest := ComObject("WinHttp.WinHttpRequest.5.1")
@@ -1049,6 +1210,8 @@ SettingsSave(*) {
     IniWrite(CheckBoxCSVOnePerDay.Value, iniFile, "SettingsWindow", "CSVOnePerDay")
     IniWrite(CheckBoxCSVSingleAdd.Value, iniFile, "SettingsWindow", "CSVSingleAdd")
     IniWrite(UpDownLoginTimeout.Value, iniFile, "SettingsWindow", "LoginTimeout")
+    IniWrite(UpDownDownloadTimeout.Value, iniFile, "SettingsWindow", "DownloadTimeout")
+    IniWrite(UpDownLoginTimeBetween.Value, iniFile, "SettingsWindow", "LoginTimeBetween")
     IniWrite(EditHotkey.Value, iniFile, "SettingsWindow", "Hotkey")
     ;IniWrite(CheckBoxDirectControl.Value, iniFile, "SettingsWindow", "Directcontrol")
 }
@@ -1069,6 +1232,8 @@ SettingsLoad(*) {
     CheckBoxCSVOnePerDay.Value := IniRead(iniFile, "SettingsWindow", "CSVOnePerDay", 0)
     CheckBoxCSVSingleAdd.Value := IniRead(iniFile, "SettingsWindow", "CSVSingleAdd", 0)
     UpDownLoginTimeout.Value := IniRead(iniFile, "SettingsWindow", "LoginTimeout", 10)
+    UpDownDownloadTimeout.Value := IniRead(iniFile, "SettingsWindow", "DownloadTimeout", 120)
+    UpDownLoginTimeBetween.Value := IniRead(iniFile, "SettingsWindow", "LoginTimeBetween", 300)
     EditHotkey.Value := IniRead(iniFile, "SettingsWindow", "Hotkey", "^Numpad0")
     ;CheckBoxDirectControl.Value := IniRead(iniFile, "SettingsWindow", "DirectControl", 0)
     global scriptHotKey := EditHotkey.Value
