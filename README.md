@@ -13,7 +13,7 @@ AutoHotKey V2 Script to automate using [QobuzDownloaderX](https://github.com/ImA
 - "Cleans" / Removes the FLAC (##bit-##kHz) folders that QobuzDownloaderX creates
 - CSV for queue logs
 
-## **Demo Video:**
+## **Demo Video for v0.5:**
 
 [Video Version 0.5.webm](https://user-images.githubusercontent.com/90281465/233743962-d247a686-5328-4f92-8d34-1cf0b03e6d7b.webm)
 
@@ -56,6 +56,11 @@ Open QobuzDownloaderX, login, set a folder to download.
 Click "Start Download Queue of #".
 
 Your set amount of instances of QobuzDownloaderX will open, login, and start working on your queue.
+
+**For Version 0.6 and above:**
+Wait till tooltip no longer says you can't use your mouse and the instances will run in the background. You can still use the Hotkey to pause.
+
+**For Version 0.5 and below:**
 
 During the automation, you won't be able to use your mouse or keyboard as its needed to interact with QobuzDownloaderX. 
 If you need to pause, press your user defined hotkey but you **MUST** return to the correct instance before resuming. 
